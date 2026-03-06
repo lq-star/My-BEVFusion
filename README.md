@@ -112,11 +112,65 @@ cd checkpoints
 wget https://download.openmmlab.com/mmdetection3d/v1.1.0_models/bevfusion/bevfusion_lidar_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-2628f933.pth
 # 下载 lidar+cam
 wget https://download.openmmlab.com/mmdetection3d/v1.1.0_models/bevfusion/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-5239b1af.pth
+# 下载图像预训练模型
+wget https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth
 ```
 
 # 五、训练，测试，推理
 
 ---
+ - ## mini数据集版本
+```python
+# 在configs文件夹中创建mini_lidar_cam.py配置文件
+# 训练
+python tools/train.py projects/BEVFusion/configs/mini_lidar_cam.py \
+    --work-dir ./mini_work_dirs/bevfusion_mini \
+    --amp 
+
+```
+
+- ## 完整数据集版本
+
+#### 先在autodl上准备数据集
+
+```python
+# 1.解压训练集
+cd /root/autodl-pub/nuScenes/Fulldatasetv1.0
+# 解压metadata
+tar -xzf v1.0-trainval_meta.tgz -C /root/autodl-tmp/My-BEVFusion/data/nuscenes/
+# 逐个解压 blobs（点云+图像数据，分 10 个文件）
+tar -xzf v1.0-trainval01_blobs.tgz -C /root/autodl-tmp/My-BEVFusion/data/nuscenes/
+tar -xzf v1.0-trainval02_blobs.tgz -C /root/autodl-tmp/My-BEVFusion/data/nuscenes/
+tar -xzf v1.0-trainval03_blobs.tgz -C /root/autodl-tmp/My-BEVFusion/data/nuscenes/
+tar -xzf v1.0-trainval04_blobs.tgz -C /root/autodl-tmp/My-BEVFusion/data/nuscenes/
+tar -xzf v1.0-trainval05_blobs.tgz -C /root/autodl-tmp/My-BEVFusion/data/nuscenes/
+tar -xzf v1.0-trainval06_blobs.tgz -C /root/autodl-tmp/My-BEVFusion/data/nuscenes/
+tar -xzf v1.0-trainval07_blobs.tgz -C /root/autodl-tmp/My-BEVFusion/data/nuscenes/
+tar -xzf v1.0-trainval08_blobs.tgz -C /root/autodl-tmp/My-BEVFusion/data/nuscenes/
+tar -xzf v1.0-trainval09_blobs.tgz -C /root/autodl-tmp/My-BEVFusion/data/nuscenes/
+tar -xzf v1.0-trainval10_blobs.tgz -C /root/autodl-tmp/My-BEVFusion/data/nuscenes/
+# 2.解压地图 
+cd /root/autodl-pub/nuScenes/Mapexpansion
+unzip nuScenes-map-expansion-v1.3.zip -d /root/autodl-tmp/My-BEVFusion/data/nuscenes/maps/
+# 3.解压测试集
+cd /root/autodl-pub/nuScenes/Fulldatasetv1.0/Test
+tar -xzf v1.0-test_meta.tar -C /root/autodl-tmp/My-BEVFusion/data/nuscenes/
+tar -xzf v1.0-test_blobs.tgz -C /root/autodl-tmp/My-BEVFusion/data/nuscenes/
+# 4.生成pkl文件
+python tools/create_data.py nuscenes --root-path ./data/nuscenes --out-dir ./data/nuscenes --extra-tag nuscenes
+# 测试集是没有标注的，如果需要在nuscenes官网跑分就解压测试集生成pkl文件，用训练好的模型去推理生成检测框报告提交
+python tools/create_data.py nuscenes --root-path ./data/nuscenes --out-dir ./data/nuscenes --extra-tag nuscenes --version v1.0-test
+
+# 检查磁盘剩余空间
+df -h /root/autodl-tmp/
+
+```
+#### 训练测试
+
+```python
+# 在官方模型上firntune微调,训练6个epoch
+
+```
 - ## 官方命令
 ```python
 # demo
@@ -130,104 +184,4 @@ bash tools/dist_train.sh projects/BEVFusion/configs/bevfusion_lidar-cam_voxel007
 # 测试
 bash tools/dist_test.sh projects/BEVFusion/configs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py ${CHECKPOINT_PATH} 8
 
-```
-
-- ## 单卡lidar-only
-```python
-# 1. lidar-only 训练（从头训练，不加载预训练权重）
-python tools/train.py projects/BEVFusion/configs/bevfusion_lidar_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py
-
-# 2. lidar-only 训练（加载预训练权重）
-python tools/train.py \
-  projects/BEVFusion/configs/bevfusion_lidar_voxel0075_second_secfpn_8xb4-cyclic-20e  _nus-3d.py \
-  --cfg-options \
-  load_from=checkpoints/bevfusion_lidar_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-2628f933.pth
-
-# 3. lidar-only 测试（用官方预训练模型），要用自己训练出来的模型的话，就把第三行换成自己训练出来的模型
-python tools/test.py \
-  projects/BEVFusion/configs/bevfusion_lidar_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py \
-  checkpoints/bevfusion_lidar_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-2628f933.pth \
-  --eval bbox
-
-```
-
-- ## 单卡lidar+cam
-```python
-# 1.idar+cam训练（从头训练，不加载预训练权重）
-python tools/train.py \
-  projects/BEVFusion/configs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py
-
-# 2. idar+cam训练（加载预训练权重）
-python tools/train.py \
-  projects/BEVFusion/configs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py \
-  --cfg-options \
-  load_from=checkpoints/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-5239b1af.pth
-
-# 3. idar+cam测试（用官方预训练模型），要用自己训练出来的模型的话，就把第三行换成自己训练出来的模型
-python tools/test.py \
-  projects/BEVFusion/configs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py \
-  checkpoints/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-5239b1af.pth \
-  --eval bbox
-  
-# 4.论文里的训练方式是加载点云预训练模型和图像预训练模型
-python tools/train.py \
-  projects/BEVFusion/configs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py \
-  --cfg-options \
-  load_from=checkpoints/bevfusion_lidar_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-2628f933.pth \
-  model.img_backbone.init_cfg.checkpoint=checkpoints/swint-nuimages-pretrained.pth
-```
-- ## 单机多卡lidar-only
-```python
-# 1.lidar-only 多卡训练（从头训练，不加载预训练权重）
-bash tools/dist_train.sh \
-  projects/BEVFusion/configs/bevfusion_lidar_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py \
-  4 \
-  --amp
-  
-# 2.lidar-only 多卡训练（加载预训练权重）
-bash tools/dist_train.sh \
-  projects/BEVFusion/configs/bevfusion_lidar_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py \
-  4 \
-  --cfg-options \
-  load_from=checkpoints/bevfusion_lidar_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-2628f933.pth \
-  --amp
-  
-# 3. lidar-only 多卡测试（用官方预训练模型），要用自己训练出来的模型的话，就把第三行换成自己训练出来的模型
-bash tools/dist_test.sh \
-  projects/BEVFusion/configs/bevfusion_lidar_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py \
-  checkpoints/bevfusion_lidar_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-2628f933.pth \
-  4 \
-  --eval bbox
-```
-- ## 单机多卡lidar+cam
-```python
-# 1. lidar+cam 多卡训练（从头训练，不加载预训练权重）
-bash tools/dist_train.sh \
-  projects/BEVFusion/configs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py \
-  4 \
-  --amp
-
-# 2. lidar+cam 多卡训练（加载官方 lidar+cam 预训练权重，微调）
-bash tools/dist_train.sh \
-  projects/BEVFusion/configs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py \
-  4 \
-  --cfg-options \
-  load_from=checkpoints/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-5239b1af.pth \
-  --amp
-
-# 3. lidar+cam 多卡测试（用官方预训练模型），要用自己训练出来的模型就把第三行换成自己的 ckpt
-bash tools/dist_test.sh \
-  projects/BEVFusion/configs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py \
-  checkpoints/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-5239b1af.pth \
-  4 \
-  --eval bbox
-
-# 4. 论文方式的多卡训练：加载点云预训练 + 图像预训练
-bash tools/dist_train.sh \
-  projects/BEVFusion/configs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py \
-  4 \
-  --cfg-options \
-  load_from=checkpoints/bevfusion_lidar_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-2628f933.pth \
-  model.img_backbone.init_cfg.checkpoint=checkpoints/swint-nuimages-pretrained.pth \
-  --amp
 ```
